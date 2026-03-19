@@ -105,3 +105,4 @@ Después reinicia la Raspberry Pi para aplicar el cambio de grupo.
 - El script espera líneas con el formato `temp_ambiente,temp_objeto`.
 - El script limpia el buffer serial al arrancar y toma la primera lectura válida como referencia.
 - Después de eso, solo guarda una fila por cada `30` segundos. Si cambias el intervalo en el Arduino, usa `--sample-interval` con el mismo valor en la Raspberry Pi.
+- Si el archivo CSV se borra mientras el script está corriendo, el proceso detecta la ausencia del archivo, lo recrea y sigue escribiendo en la misma ruta.

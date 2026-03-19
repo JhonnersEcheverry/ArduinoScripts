@@ -40,6 +40,30 @@ def should_store_reading(
     return (now_monotonic - last_saved_monotonic) >= interval_seconds
 
 
+def open_csv_writer(csv_path: str) -> tuple[object, csv.writer]:
+    csv_exists = os.path.exists(csv_path)
+    csv_file = open(csv_path, "a", newline="", encoding="utf-8")
+    writer = csv.writer(csv_file)
+
+    if not csv_exists or os.path.getsize(csv_path) == 0:
+        writer.writerow(["timestamp", "temp_ambiente", "temp_objeto"])
+        csv_file.flush()
+
+    return csv_file, writer
+
+
+def ensure_csv_available(
+    csv_path: str, csv_file: object, writer: csv.writer
+) -> tuple[object, csv.writer]:
+    if os.path.exists(csv_path):
+        return csv_file, writer
+
+    csv_file.close()
+    new_csv_file, new_writer = open_csv_writer(csv_path)
+    print(f"Archivo CSV recreado: {csv_path}")
+    return new_csv_file, new_writer
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Lee TempAmbiente y TempObjeto desde Arduino por serial."
@@ -77,20 +101,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    csv_file = None
     try:
-        csv_exists = os.path.exists(args.csv)
-        with (
-            serial.Serial(args.port, args.baudrate, timeout=args.timeout) as ser,
-            open(args.csv, "a", newline="", encoding="utf-8") as csv_file,
-        ):
+        with serial.Serial(args.port, args.baudrate, timeout=args.timeout) as ser:
             wait_for_arduino_reset()
             ser.reset_input_buffer()
 
-            writer = csv.writer(csv_file)
-            if not csv_exists or os.path.getsize(args.csv) == 0:
-                writer.writerow(["timestamp", "temp_ambiente", "temp_objeto"])
-                csv_file.flush()
-
+            csv_file, writer = open_csv_writer(args.csv)
             last_saved_monotonic: float | None = None
             print(
                 f"Escuchando {args.port} a {args.baudrate} baud. "
@@ -120,6 +137,7 @@ def main() -> int:
                     ):
                         continue
 
+                    csv_file, writer = ensure_csv_available(args.csv, csv_file, writer)
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     writer.writerow([ts, temp_ambiente, temp_objeto])
                     csv_file.flush()
@@ -136,6 +154,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\nLectura detenida por usuario.")
         return 0
+    finally:
+        if csv_file is not None and not csv_file.closed:
+            csv_file.close()
 
 
 if __name__ == "__main__":
